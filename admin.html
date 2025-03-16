@@ -207,7 +207,7 @@
       const fileContent = new Blob([JSON.stringify(geojsonData, null, 4)], { type: "application/json" });
 
       try {
-        const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${FILE_NAME}`, {
+        await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${FILE_NAME}`, {
           method: "PUT",
           headers: {
             "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
@@ -324,20 +324,20 @@
 
     /* ---------- Delete Lot Functionality ---------- */
 
-    function deleteLot() {
+    async function deleteLot() {
       if (!selectedFeature) {
         alert("No lot selected to delete.");
         return;
       }
       if (!confirm("Are you sure you want to delete this lot?")) return;
-      // Filter out the selected feature from geojsonData.features
+      // Remove the selected feature from geojsonData.features
       geojsonData.features = geojsonData.features.filter(feature => {
         return String(feature.properties.plot_id) !== String(selectedFeature.plot_id);
       });
-      // Reset selectedFeature and hide the editor
       selectedFeature = null;
       document.getElementById('editor').style.display = 'none';
-      // Reload the GeoJSON layer
+      // Save the updated GeoJSON to Supabase and refresh the map
+      await saveGeoJSONToSupabase();
       loadGeoJSON();
     }
   </script>
