@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GeoJSON Editor for Lots</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <!-- Include Supabase JS client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/supabase.min.js"></script>
   <style>
     #map { height: 60vh; width: 100%; }
     #editor { padding: 10px; }
@@ -39,7 +41,7 @@
 </head>
 <body onload="initializeMap()">
   <h2>GeoJSON Lot Editor</h2>
-  <input type="file" id="fileInput" accept=".geojson" onchange="loadFile(event)">
+  <input type="file" id="fileInput" accept=".geojson" onchange="loadFile(event)" />
   <button onclick="downloadGeoJSON()">📥 Download JSON</button>
   <button onclick="saveGeoJSONToSupabase()">🚀 Master Update</button>
   <!-- New button to enable drawing mode -->
@@ -50,7 +52,7 @@
   <div id="editor" style="display:none;">
     <h3>Edit Lot</h3>
     <p><strong>Lot ID:</strong> <span id="lot-id"></span></p>
-    <label>Price: $<input type="text" id="lot-price" onblur="autoSaveAndUpload()"></label><br>
+    <label>Price: $<input type="text" id="lot-price" onblur="autoSaveAndUpload()" /></label><br />
     <label>Status:
       <select id="lot-status" onchange="autoSaveAndUpload()">
         <option value="For Sale">For Sale</option>
@@ -58,8 +60,8 @@
         <option value="Reserved">Reserved</option>
         <option value="Not for Sale">Not for Sale</option>
       </select>
-    </label><br>
-    <label>Lot Size: <input type="text" id="lot-size" onblur="autoSaveAndUpload()"></label><br>
+    </label><br />
+    <label>Lot Size: <input type="text" id="lot-size" onblur="autoSaveAndUpload()" /></label><br />
     <label>Category:
       <select id="lot-category" onchange="autoSaveAndUpload()">
         <option value="Single Family Homesites">Single Family Homesites</option>
@@ -67,9 +69,9 @@
         <option value="Commercial">Commercial</option>
         <option value="Mixed Use">Mixed Use</option>
       </select>
-    </label><br>
-    <label>Description: <textarea id="lot-description" onblur="autoSaveAndUpload()"></textarea></label><br>
-    <label>Buy Link: <input type="text" id="lot-link" onblur="autoSaveAndUpload()"></label><br>
+    </label><br />
+    <label>Description: <textarea id="lot-description" onblur="autoSaveAndUpload()"></textarea></label><br />
+    <label>Buy Link: <input type="text" id="lot-link" onblur="autoSaveAndUpload()" /></label><br />
     <!-- Delete button -->
     <button id="deleteLotButton" onclick="deleteLot()">🗑 Delete Lot</button>
   </div>
@@ -78,12 +80,21 @@
   <div id="drawingEditor">
     <h3>Draw Zone</h3>
     <p>Click on the map to add vertices that form the zone border. When finished, enter a zone name and click "Save Zone".</p>
-    <label>Zone Name: <input type="text" id="zoneName"></label><br>
+    <label>Zone Name: <input type="text" id="zoneName" /></label><br />
     <button onclick="finishDrawing()">Save Zone</button>
     <button onclick="cancelDrawing()">Cancel Drawing</button>
   </div>
 
   <script>
+    // Supabase configuration – using your project URL and service role key.
+    // (Note: Exposing a service role key in client code is not secure for production.)
+    const SUPABASE_URL = "https://poxxulxqzxwotequkwbw.supabase.co";
+    const SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBveHh1bHhxenh3b3RlcXVrd2J3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDI1NjM2NywiZXhwIjoyMDU1ODMyMzY3fQ.qCvdI1kkLn72ucM9aBuXttK-95vux-YRC_J2PUSI8WA";
+    const STORAGE_BUCKET = "geojson-files";
+    const FILE_NAME = "lots.geojson";
+    // Initialize Supabase client
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
     let geojsonData;
     let geojsonLayer;  // Holds the current GeoJSON layer on the map
     let selectedFeature;
@@ -91,18 +102,12 @@
     let map;
     let markersGroup;  // Layer group for markers
 
-    // Supabase Storage configuration
-    const SUPABASE_URL = "https://poxxulxqzxwotequkwbw.supabase.co";
-    const SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBveHh1bHhxenh3b3RlcXVrd2J3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDI1NjM2NywiZXhwIjoyMDU1ODMyMzY3fQ.qCvdI1kkLn72ucM9aBuXttK-95vux-YRC_J2PUSI8WA"; 
-    const STORAGE_BUCKET = "geojson-files";
-    const FILE_NAME = "lots.geojson";
-
     function initializeMap() {
       map = L.map('map').setView([11.575, -86.244], 16);
       let baseLayers = {
-        'Street View': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map),
-        'Satellite View': L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-          subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        "Street View": L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map),
+        "Satellite View": L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
+          subdomains: ["mt0", "mt1", "mt2", "mt3"]
         })
       };
       L.control.layers(baseLayers).addTo(map);
@@ -126,7 +131,7 @@
         case "Sold": return "red";
         case "Reserved": return "yellow";
         case "Not for Sale": return "grey";
-        default: return "blue"; 
+        default: return "blue";
       }
     }
 
@@ -152,36 +157,34 @@
         markersGroup.clearLayers();
       }
       geojsonLayer = L.geoJSON(geojsonData, {
-        style: function (feature) {
+        style: function(feature) {
           return { color: getLotColor(feature.properties.status), weight: 2 };
         },
-        onEachFeature: function (feature, layer) {
+        onEachFeature: function(feature, layer) {
           // Create a label icon with the lot's plot_id
           let labelIcon = L.divIcon({
-            className: 'lot-label',
+            className: "lot-label",
             html: feature.properties.plot_id,
             iconSize: [1, 1]
           });
           // Add marker to the markers group
           markersGroup.addLayer(L.marker(layer.getBounds().getCenter(), { icon: labelIcon }));
-
-          layer.on('click', function () {
-            // If drawing mode is active, ignore lot editing
-            if (isDrawing) return;
+          layer.on("click", function() {
+            if (isDrawing) return; // Ignore clicks in drawing mode
             if (selectedLayer) {
               selectedLayer.setStyle({ color: getLotColor(selectedLayer.feature.properties.status) });
             }
             selectedLayer = layer;
             layer.setStyle({ color: "#00FFFF" });
             selectedFeature = feature;
-            document.getElementById('editor').style.display = 'block';
-            document.getElementById('lot-id').innerText = feature.properties.plot_id;
-            document.getElementById('lot-price').value = feature.properties.price || '';
-            document.getElementById('lot-status').value = feature.properties.status || 'For Sale';
-            document.getElementById('lot-size').value = feature.properties.area_m || '';
-            document.getElementById('lot-category').value = feature.properties.Category || 'Single Family Homesites';
-            document.getElementById('lot-description').value = feature.properties.Description || '';
-            document.getElementById('lot-link').value = feature.properties.buy_link || ''; 
+            document.getElementById("editor").style.display = "block";
+            document.getElementById("lot-id").innerText = feature.properties.plot_id;
+            document.getElementById("lot-price").value = feature.properties.price || "";
+            document.getElementById("lot-status").value = feature.properties.status || "For Sale";
+            document.getElementById("lot-size").value = feature.properties.area_m || "";
+            document.getElementById("lot-category").value = feature.properties.Category || "Single Family Homesites";
+            document.getElementById("lot-description").value = feature.properties.Description || "";
+            document.getElementById("lot-link").value = feature.properties.buy_link || "";
           });
         }
       }).addTo(map);
@@ -189,37 +192,32 @@
 
     function autoSaveAndUpload() {
       if (!selectedFeature) return;
-      selectedFeature.properties.price = document.getElementById('lot-price').value;
-      selectedFeature.properties.status = document.getElementById('lot-status').value;
-      selectedFeature.properties.area_m = document.getElementById('lot-size').value;
-      selectedFeature.properties.Category = document.getElementById('lot-category').value;
-      selectedFeature.properties.Description = document.getElementById('lot-description').value;
-      selectedFeature.properties.buy_link = document.getElementById('lot-link').value;
+      selectedFeature.properties.price = document.getElementById("lot-price").value;
+      selectedFeature.properties.status = document.getElementById("lot-status").value;
+      selectedFeature.properties.area_m = document.getElementById("lot-size").value;
+      selectedFeature.properties.Category = document.getElementById("lot-category").value;
+      selectedFeature.properties.Description = document.getElementById("lot-description").value;
+      selectedFeature.properties.buy_link = document.getElementById("lot-link").value;
       saveGeoJSONToSupabase();
     }
 
-    // Updated save function: using PUT with upsert via the proper URL format.
+    // Use Supabase client to update the file
     async function saveGeoJSONToSupabase() {
       const statusIndicator = document.getElementById("statusIndicator");
       statusIndicator.textContent = "Uploading...";
-      statusIndicator.className = "status-indicator";
-      const fileContent = new Blob([JSON.stringify(geojsonData, null, 4)], { type: "application/json" });
       try {
-        const response = await fetch(
-          `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${FILE_NAME}?upsert=true`,
-          {
-            method: "PUT",
-            headers: {
-              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-              "Content-Type": "application/json"
-            },
-            body: fileContent
-          }
-        );
-        if (!response.ok) throw new Error("Upload failed");
+        const { data, error } = await supabase
+          .storage
+          .from(STORAGE_BUCKET)
+          .update(FILE_NAME, JSON.stringify(geojsonData, null, 4), {
+            cacheControl: "3600",
+            upsert: true,
+            contentType: "application/json"
+          });
+        if (error) throw error;
         statusIndicator.textContent = "✅ Upload Success";
         statusIndicator.className = "status-indicator success";
-        setTimeout(() => statusIndicator.textContent = "", 3000);
+        setTimeout(() => (statusIndicator.textContent = ""), 3000);
       } catch (err) {
         statusIndicator.textContent = "❌ Error uploading.";
         statusIndicator.className = "status-indicator error";
@@ -239,8 +237,8 @@
         map.removeLayer(drawingLayer);
         drawingLayer = null;
       }
-      document.getElementById('drawingEditor').style.display = 'block';
-      map.on('click', onMapClickForDrawing);
+      document.getElementById("drawingEditor").style.display = "block";
+      map.on("click", onMapClickForDrawing);
     }
 
     function onMapClickForDrawing(e) {
@@ -249,7 +247,7 @@
       if (drawingLayer) {
         drawingLayer.setLatLngs(drawingPoints);
       } else {
-        drawingLayer = L.polygon(drawingPoints, { color: 'blue' }).addTo(map);
+        drawingLayer = L.polygon(drawingPoints, { color: "blue" }).addTo(map);
       }
     }
 
@@ -270,7 +268,7 @@
         alert("You need at least 3 points to form a zone.");
         return;
       }
-      let zoneName = document.getElementById('zoneName').value;
+      let zoneName = document.getElementById("zoneName").value;
       if (!zoneName) {
         alert("Please enter a zone name.");
         return;
@@ -319,9 +317,9 @@
         map.removeLayer(drawingLayer);
         drawingLayer = null;
       }
-      map.off('click', onMapClickForDrawing);
-      document.getElementById('drawingEditor').style.display = 'none';
-      document.getElementById('zoneName').value = "";
+      map.off("click", onMapClickForDrawing);
+      document.getElementById("drawingEditor").style.display = "none";
+      document.getElementById("zoneName").value = "";
     }
 
     /* ---------- Delete Lot Functionality ---------- */
@@ -336,7 +334,7 @@
         return String(feature.properties.plot_id) !== String(selectedFeature.plot_id);
       });
       selectedFeature = null;
-      document.getElementById('editor').style.display = 'none';
+      document.getElementById("editor").style.display = "none";
       // Save updated GeoJSON to Supabase and refresh the map
       await saveGeoJSONToSupabase();
       loadGeoJSON();
