@@ -88,7 +88,7 @@
     let selectedFeature;
     let selectedLayer;
     let map;
-    let markersGroup; // Group to store lot label markers
+    let markersGroup;  // New layer group for markers
 
     const SUPABASE_URL = "https://poxxulxqzxwotequkwbw.supabase.co";
     const SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBveHh1bHhxenh3b3RlcXVrd2J3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDI1NjM2NywiZXhwIjoyMDU1ODMyMzY3fQ.qCvdI1kkLn72ucM9aBuXttK-95vux-YRC_J2PUSI8WA"; 
@@ -105,7 +105,7 @@
       };
       L.control.layers(baseLayers).addTo(map);
       
-      // Initialize markers group and add to map
+      // Initialize markersGroup
       markersGroup = L.layerGroup().addTo(map);
 
       fetch(`${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${FILE_NAME}`)
@@ -140,13 +140,13 @@
     function loadGeoJSON() {
       if (!geojsonData) return;
 
-      // Remove previous GeoJSON layers
+      // Remove previous GeoJSON layers (if any)
       map.eachLayer(layer => {
         if (layer instanceof L.GeoJSON) {
           map.removeLayer(layer);
         }
       });
-      // Clear markers group
+      // Clear previous markers
       if (markersGroup) {
         markersGroup.clearLayers();
       }
@@ -156,14 +156,13 @@
           return { color: getLotColor(feature.properties.status), weight: 2 };
         },
         onEachFeature: function (feature, layer) {
-          // Create a label marker and add to markersGroup
-          let label = L.divIcon({
+          let labelIcon = L.divIcon({
             className: 'lot-label',
             html: feature.properties.plot_id,
             iconSize: [1, 1]
           });
-          let marker = L.marker(layer.getBounds().getCenter(), { icon: label });
-          markersGroup.addLayer(marker);
+          // Add marker to the markersGroup
+          markersGroup.addLayer(L.marker(layer.getBounds().getCenter(), { icon: labelIcon }));
 
           layer.on('click', function () {
             // If drawing mode is active, ignore lot editing
@@ -305,6 +304,7 @@
           coordinates: [drawingPoints.map(latlng => [latlng.lng, latlng.lat])]
         }
       };
+      // Ensure geojsonData is a FeatureCollection and add the new feature
       if (!geojsonData.features) {
         geojsonData = {
           type: "FeatureCollection",
@@ -317,6 +317,7 @@
         };
       }
       geojsonData.features.push(newFeature);
+      // Disable drawing mode and refresh the map to show the new zone
       disableDrawingMode();
       loadGeoJSON();
     }
@@ -349,11 +350,11 @@
       if (!confirm("Are you sure you want to delete this lot?")) {
         return;
       }
-      // Remove the selected feature using string conversion to handle numeric/string differences
+      // Filter out the selected feature using plot_id
       geojsonData.features = geojsonData.features.filter(feature => {
         return String(feature.properties.plot_id) !== String(selectedFeature.plot_id);
       });
-      // Clear the editor and refresh the map
+      // Clear the editor, reset selectedFeature, and reload the GeoJSON
       selectedFeature = null;
       document.getElementById('editor').style.display = 'none';
       loadGeoJSON();
