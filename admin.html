@@ -91,6 +91,7 @@
     let map;
     let markersGroup;  // Layer group for markers
 
+    // Supabase Storage configuration
     const SUPABASE_URL = "https://poxxulxqzxwotequkwbw.supabase.co";
     const SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBveHh1bHhxenh3b3RlcXVrd2J3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDI1NjM2NywiZXhwIjoyMDU1ODMyMzY3fQ.qCvdI1kkLn72ucM9aBuXttK-95vux-YRC_J2PUSI8WA"; 
     const STORAGE_BUCKET = "geojson-files";
@@ -142,7 +143,6 @@
     // Re-load the GeoJSON layer on the map
     function loadGeoJSON() {
       if (!geojsonData) return;
-
       // Remove previous GeoJSON layer if it exists
       if (geojsonLayer) {
         map.removeLayer(geojsonLayer);
@@ -151,7 +151,6 @@
       if (markersGroup) {
         markersGroup.clearLayers();
       }
-
       geojsonLayer = L.geoJSON(geojsonData, {
         style: function (feature) {
           return { color: getLotColor(feature.properties.status), weight: 2 };
@@ -174,7 +173,6 @@
             }
             selectedLayer = layer;
             layer.setStyle({ color: "#00FFFF" });
-
             selectedFeature = feature;
             document.getElementById('editor').style.display = 'block';
             document.getElementById('lot-id').innerText = feature.properties.plot_id;
@@ -200,32 +198,33 @@
       saveGeoJSONToSupabase();
     }
 
+    // Updated save function: uses POST with upsert flag so that the file is replaced on Supabase
     async function saveGeoJSONToSupabase() {
       const statusIndicator = document.getElementById("statusIndicator");
       statusIndicator.textContent = "Uploading...";
       statusIndicator.className = "status-indicator";
       const fileContent = new Blob([JSON.stringify(geojsonData, null, 4)], { type: "application/json" });
-
       try {
-        await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${FILE_NAME}`, {
-          method: "PUT",
+        const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}?path=${FILE_NAME}&upsert=true`, {
+          method: "POST",
           headers: {
             "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             "Content-Type": "application/json"
           },
           body: fileContent
         });
+        if (!response.ok) throw new Error("Upload failed");
         statusIndicator.textContent = "✅ Upload Success";
         statusIndicator.className = "status-indicator success";
         setTimeout(() => statusIndicator.textContent = "", 3000);
-      } catch {
+      } catch (err) {
         statusIndicator.textContent = "❌ Error uploading.";
         statusIndicator.className = "status-indicator error";
+        console.error("Error uploading to Supabase:", err);
       }
     }
 
     /* ---------- Drawing Functionality for Creating Zones ---------- */
-
     let isDrawing = false;
     let drawingPoints = [];
     let drawingLayer = null;
@@ -323,7 +322,6 @@
     }
 
     /* ---------- Delete Lot Functionality ---------- */
-
     async function deleteLot() {
       if (!selectedFeature) {
         alert("No lot selected to delete.");
@@ -336,7 +334,7 @@
       });
       selectedFeature = null;
       document.getElementById('editor').style.display = 'none';
-      // Save the updated GeoJSON to Supabase and refresh the map
+      // Save updated GeoJSON to Supabase and refresh the map
       await saveGeoJSONToSupabase();
       loadGeoJSON();
     }
