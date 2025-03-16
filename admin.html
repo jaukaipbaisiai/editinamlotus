@@ -249,6 +249,20 @@
       }
     }
 
+    // Helper function to calculate the next numeric plot_id
+    function getNextPlotId() {
+      let maxId = 0;
+      if (geojsonData && geojsonData.features) {
+        geojsonData.features.forEach(f => {
+          let pid = parseInt(f.properties.plot_id);
+          if (!isNaN(pid) && pid > maxId) {
+            maxId = pid;
+          }
+        });
+      }
+      return maxId + 1;
+    }
+
     // Finish drawing and save the new zone
     function finishDrawing() {
       if (drawingPoints.length < 3) {
@@ -260,19 +274,20 @@
         alert("Please enter a zone name.");
         return;
       }
+      let newId = getNextPlotId();
       // Create a new GeoJSON feature for the drawn zone using the same structure as lots.geojson
       let newFeature = {
         type: "Feature",
         properties: {
-          OBJECTID: Date.now(), // unique id, you might want to adjust as needed
+          OBJECTID: newId,
           area_m: "",
           Category: "Custom Zone",
-          plot_id: "zone-" + Date.now(),
+          plot_id: newId,
           Shape_Leng: 0,
           Shape_Area: 0,
           price: "",
           status: "For Sale",
-          Description: "",
+          Description: zoneName, // Optionally store the zone name in Description or add a new property
           buy_link: ""
         },
         geometry: {
@@ -323,13 +338,12 @@
         alert("No lot selected to delete.");
         return;
       }
-      // Confirm deletion
       if (!confirm("Are you sure you want to delete this lot?")) {
         return;
       }
-      // Remove the selected feature from geojsonData.features
+      // Use a loose comparison by converting to string to cover numeric vs. string issues
       geojsonData.features = geojsonData.features.filter(feature => {
-        return feature.properties.plot_id !== selectedFeature.plot_id;
+        return String(feature.properties.plot_id) !== String(selectedFeature.plot_id);
       });
       // Clear the editor and refresh the map
       selectedFeature = null;
