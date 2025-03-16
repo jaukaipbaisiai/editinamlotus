@@ -87,7 +87,7 @@
 
   <script>
     // Supabase configuration – using your project URL and service role key.
-    // (Note: Exposing a service role key in client code is not secure for production.)
+    // (Exposing the service role key in client code is not secure for production.)
     const SUPABASE_URL = "https://poxxulxqzxwotequkwbw.supabase.co";
     const SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBveHh1bHhxenh3b3RlcXVrd2J3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDI1NjM2NywiZXhwIjoyMDU1ODMyMzY3fQ.qCvdI1kkLn72ucM9aBuXttK-95vux-YRC_J2PUSI8WA";
     const STORAGE_BUCKET = "geojson-files";
@@ -96,14 +96,28 @@
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     let geojsonData;
-    let geojsonLayer;  // Holds the current GeoJSON layer on the map
+    let geojsonLayer; // Holds the current GeoJSON layer on the map
     let selectedFeature;
     let selectedLayer;
     let map;
-    let markersGroup;  // Layer group for markers
+    let markersGroup; // Layer group for markers
+
+    // Use Supabase client to download the file from storage
+    async function loadFileFromSupabase() {
+      const { data, error } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .download(FILE_NAME);
+      if (error) {
+        console.error("Error downloading file:", error);
+        return;
+      }
+      const text = await data.text();
+      geojsonData = JSON.parse(text);
+      loadGeoJSON();
+    }
 
     function initializeMap() {
-      map = L.map('map').setView([11.575, -86.244], 16);
+      map = L.map("map").setView([11.575, -86.244], 16);
       let baseLayers = {
         "Street View": L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map),
         "Satellite View": L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
@@ -115,30 +129,30 @@
       // Initialize markersGroup
       markersGroup = L.layerGroup().addTo(map);
 
-      // Load the GeoJSON from Supabase
-      fetch(`${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${FILE_NAME}`)
-        .then(response => response.json())
-        .then(data => {
-          geojsonData = data;
-          loadGeoJSON();
-        })
-        .catch(error => console.error("❌ Error loading GeoJSON from Supabase:", error));
+      // Load the GeoJSON file using Supabase client
+      loadFileFromSupabase();
     }
 
     function getLotColor(status) {
       switch (status) {
-        case "For Sale": return "green";
-        case "Sold": return "red";
-        case "Reserved": return "yellow";
-        case "Not for Sale": return "grey";
-        default: return "blue";
+        case "For Sale":
+          return "green";
+        case "Sold":
+          return "red";
+        case "Reserved":
+          return "yellow";
+        case "Not for Sale":
+          return "grey";
+        default:
+          return "blue";
       }
     }
 
     function loadFile(event) {
+      // Fallback: if you choose to load from a local file instead of Supabase
       const file = event.target.files[0];
       const reader = new FileReader();
-      reader.onload = function(e) {
+      reader.onload = function (e) {
         geojsonData = JSON.parse(e.target.result);
         loadGeoJSON();
       };
@@ -157,10 +171,10 @@
         markersGroup.clearLayers();
       }
       geojsonLayer = L.geoJSON(geojsonData, {
-        style: function(feature) {
+        style: function (feature) {
           return { color: getLotColor(feature.properties.status), weight: 2 };
         },
-        onEachFeature: function(feature, layer) {
+        onEachFeature: function (feature, layer) {
           // Create a label icon with the lot's plot_id
           let labelIcon = L.divIcon({
             className: "lot-label",
@@ -168,11 +182,15 @@
             iconSize: [1, 1]
           });
           // Add marker to the markers group
-          markersGroup.addLayer(L.marker(layer.getBounds().getCenter(), { icon: labelIcon }));
-          layer.on("click", function() {
+          markersGroup.addLayer(
+            L.marker(layer.getBounds().getCenter(), { icon: labelIcon })
+          );
+          layer.on("click", function () {
             if (isDrawing) return; // Ignore clicks in drawing mode
             if (selectedLayer) {
-              selectedLayer.setStyle({ color: getLotColor(selectedLayer.feature.properties.status) });
+              selectedLayer.setStyle({
+                color: getLotColor(selectedLayer.feature.properties.status)
+              });
             }
             selectedLayer = layer;
             layer.setStyle({ color: "#00FFFF" });
@@ -209,11 +227,11 @@
         const { data, error } = await supabase
           .storage
           .from(STORAGE_BUCKET)
-          .update(FILE_NAME, JSON.stringify(geojsonData, null, 4), {
-            cacheControl: "3600",
-            upsert: true,
-            contentType: "application/json"
-          });
+          .update(
+            FILE_NAME,
+            JSON.stringify(geojsonData, null, 4),
+            { upsert: true, contentType: "application/json" }
+          );
         if (error) throw error;
         statusIndicator.textContent = "✅ Upload Success";
         statusIndicator.className = "status-indicator success";
