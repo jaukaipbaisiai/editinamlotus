@@ -198,21 +198,24 @@
       saveGeoJSONToSupabase();
     }
 
-    // Updated save function: uses POST with upsert flag so that the file is replaced on Supabase
+    // Updated save function: using PUT with upsert via the proper URL format.
     async function saveGeoJSONToSupabase() {
       const statusIndicator = document.getElementById("statusIndicator");
       statusIndicator.textContent = "Uploading...";
       statusIndicator.className = "status-indicator";
       const fileContent = new Blob([JSON.stringify(geojsonData, null, 4)], { type: "application/json" });
       try {
-        const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}?path=${FILE_NAME}&upsert=true`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: fileContent
-        });
+        const response = await fetch(
+          `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${FILE_NAME}?upsert=true`,
+          {
+            method: "PUT",
+            headers: {
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: fileContent
+          }
+        );
         if (!response.ok) throw new Error("Upload failed");
         statusIndicator.textContent = "✅ Upload Success";
         statusIndicator.className = "status-indicator success";
