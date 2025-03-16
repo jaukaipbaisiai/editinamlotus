@@ -69,7 +69,9 @@
       </select>
     </label><br>
     <label>Description: <textarea id="lot-description" onblur="autoSaveAndUpload()"></textarea></label><br>
-    <label>Buy Link: <input type="text" id="lot-link" onblur="autoSaveAndUpload()"></label><br> 
+    <label>Buy Link: <input type="text" id="lot-link" onblur="autoSaveAndUpload()"></label><br>
+    <!-- New Delete button -->
+    <button id="deleteLotButton" onclick="deleteLot()">🗑 Delete Lot</button>
   </div>
 
   <!-- New drawing editor for zone creation -->
@@ -258,28 +260,35 @@
         alert("Please enter a zone name.");
         return;
       }
-      // Create a new GeoJSON feature for the drawn zone
+      // Create a new GeoJSON feature for the drawn zone using the same structure as lots.geojson
       let newFeature = {
         type: "Feature",
+        properties: {
+          OBJECTID: Date.now(), // unique id, you might want to adjust as needed
+          area_m: "",
+          Category: "Custom Zone",
+          plot_id: "zone-" + Date.now(),
+          Shape_Leng: 0,
+          Shape_Area: 0,
+          price: "",
+          status: "For Sale",
+          Description: "",
+          buy_link: ""
+        },
         geometry: {
           type: "Polygon",
           coordinates: [drawingPoints.map(latlng => [latlng.lng, latlng.lat])]
-        },
-        properties: {
-          plot_id: "zone-" + Date.now(), // New unique ID
-          name: zoneName,
-          price: "",
-          status: "For Sale",
-          area_m: "",
-          Category: "Custom Zone",
-          Description: "",
-          buy_link: ""
         }
       };
       // Ensure geojsonData is a FeatureCollection and add the new feature
       if (!geojsonData.features) {
         geojsonData = {
           type: "FeatureCollection",
+          name: "lots",
+          crs: {
+            type: "name",
+            properties: { name: "urn:ogc:def:crs:OGC:1.3:CRS84" }
+          },
           features: []
         };
       }
@@ -305,6 +314,27 @@
       map.off('click', onMapClickForDrawing);
       document.getElementById('drawingEditor').style.display = 'none';
       document.getElementById('zoneName').value = "";
+    }
+
+    /* ---------- Delete Lot Functionality ---------- */
+
+    function deleteLot() {
+      if (!selectedFeature) {
+        alert("No lot selected to delete.");
+        return;
+      }
+      // Confirm deletion
+      if (!confirm("Are you sure you want to delete this lot?")) {
+        return;
+      }
+      // Remove the selected feature from geojsonData.features
+      geojsonData.features = geojsonData.features.filter(feature => {
+        return feature.properties.plot_id !== selectedFeature.plot_id;
+      });
+      // Clear the editor and refresh the map
+      selectedFeature = null;
+      document.getElementById('editor').style.display = 'none';
+      loadGeoJSON();
     }
   </script>
 </body>
